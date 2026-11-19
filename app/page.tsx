@@ -2,6 +2,14 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+interface UserInfo {
+  line_uid: string;
+  name?: string | null;
+  department?: string | null;
+  location?: string | null;
+  phone?: string | null;
+}
+
 interface Ticket {
   id: number | string;
   created_at: string;
@@ -9,6 +17,7 @@ interface Ticket {
   status: string;
   line_uid: string;
   image_url?: string | null;
+  user?: UserInfo | null;
 }
 
 const supabase = createClient(
@@ -34,11 +43,37 @@ export default function Dashboard() {
   }, []);
 
   const fetchTickets = async () => {
-    const { data } = await supabase
+    const { data: ticketsData } = await supabase
       .from('tickets')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setTickets(data as Ticket[]);
+
+    if (!ticketsData) return;
+
+    const typedTickets = ticketsData as Ticket[];
+    const uids = Array.from(new Set(typedTickets.map((t) => t.line_uid).filter(Boolean)));
+    const userMap: Record<string, UserInfo> = {};
+
+    // ดึงข้อมูลผู้แจ้งจากตาราง users มาจับคู่ตาม line_uid
+    if (uids.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('line_uid, name, department, location, phone')
+        .in('line_uid', uids);
+
+      if (usersData) {
+        (usersData as UserInfo[]).forEach((u) => {
+          userMap[u.line_uid] = u;
+        });
+      }
+    }
+
+    const mergedTickets: Ticket[] = typedTickets.map((t) => ({
+      ...t,
+      user: userMap[t.line_uid] || null,
+    }));
+
+    setTickets(mergedTickets);
   };
 
   const updateStatus = async (ticket: Ticket, newStatus: string, closeAfter: boolean = true) => {
@@ -78,6 +113,7 @@ export default function Dashboard() {
             <thead className="bg-blue-50 border-b border-blue-100">
               <tr>
                 <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">เวลาแจ้ง</th>
+                <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">ผู้แจ้ง / กลุ่มงาน</th>
                 <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">รายละเอียด</th>
                 <th className="py-4 px-6 text-center text-sm font-semibold text-gray-700">สถานะ</th>
                 <th className="py-4 px-6 text-center text-sm font-semibold text-gray-700">จัดการ</th>
@@ -86,11 +122,20 @@ export default function Dashboard() {
             <tbody className="divide-y divide-gray-100">
               {tickets.map((ticket) => (
                 <tr key={ticket.id} className="hover:bg-blue-50/50 transition-colors">
-                  <td className="py-4 px-6 text-sm text-gray-600 align-middle">
+                  <td className="py-4 px-6 text-sm text-gray-600 align-middle whitespace-nowrap">
                     {new Date(ticket.created_at).toLocaleString('th-TH', {
                       dateStyle: 'short',
                       timeStyle: 'short',
                     })}
+                  </td>
+
+                  <td className="py-4 px-6 text-sm align-middle">
+                    <p className="font-semibold text-gray-800">
+                      {ticket.user?.name || 'ยังไม่ระบุชื่อ'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {ticket.user?.department || '-'}
+                    </p>
                   </td>
 
                   <td className="py-4 px-6 text-sm text-gray-800 font-medium max-w-md align-middle">
@@ -151,6 +196,46 @@ export default function Dashboard() {
             </div>
 
             <div className="p-6 overflow-y-auto custom-scrollbar">
+              {/* กล่องข้อมูลผู้แจ้ง */}
+              <div className="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+                  ข้อมูลผู้แจ้งและสถานที่
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">👤 ชื่อ-นามสกุล: </span>
+                    <span className="font-semibold text-gray-800">
+                      {selectedTicket.user?.name || 'ยังไม่ลงทะเบียน'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">🏢 กลุ่มงาน: </span>
+                    <span className="font-semibold text-gray-800">
+                      {selectedTicket.user?.department || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">📍 สถานที่: </span>
+                    <span className="font-semibold text-gray-800">
+                      {selectedTicket.user?.location || '-'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">📞 เบอร์โทร: </span>
+                    {selectedTicket.user?.phone ? (
+                      <a
+                        href={`tel:${selectedTicket.user.phone}`}
+                        className="font-semibold text-blue-600 hover:underline"
+                      >
+                        {selectedTicket.user.phone}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-gray-800">-</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="mb-6 flex justify-between items-start gap-4">
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-gray-500 mb-2">อาการที่แจ้ง:</p>
