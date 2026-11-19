@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 interface UserInfo {
@@ -26,21 +27,11 @@ const supabase = createClient(
 );
 
 export default function Dashboard() {
+  const router = useRouter();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-
-  useEffect(() => {
-    fetchTickets();
-    const channel = supabase
-      .channel('realtime-tickets')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
-        fetchTickets();
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [adminEmail, setAdminEmail] = useState<string>('');
 
   const fetchTickets = async () => {
     const { data: ticketsData } = await supabase
@@ -76,6 +67,51 @@ export default function Dashboard() {
     setTickets(mergedTickets);
   };
 
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let isMounted = true;
+
+    const initDashboard = async () => {
+      // 1. ตรวจสอบสิทธิ์การล็อกอินก่อนโหลดข้อมูล
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace('/login');
+        return;
+      }
+
+      if (!isMounted) return;
+
+      setAdminEmail(session.user.email || '');
+      setCheckingAuth(false);
+
+      // 2. โหลดข้อมูลและเปิด Realtime Subscription
+      await fetchTickets();
+      channel = supabase
+        .channel('realtime-tickets')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+          fetchTickets();
+        })
+        .subscribe();
+    };
+
+    initDashboard();
+
+    return () => {
+      isMounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
+
   const updateStatus = async (ticket: Ticket, newStatus: string, closeAfter: boolean = true) => {
     await supabase.from('tickets').update({ status: newStatus }).eq('id', ticket.id);
 
@@ -103,10 +139,31 @@ export default function Dashboard() {
     }
   };
 
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-sans">
+        กำลังตรวจสอบสิทธิ์การเข้าใช้งาน...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-8 font-sans">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-blue-800">🖥️ IT Helpdesk Dashboard</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h1 className="text-3xl font-bold text-blue-800">🖥️ IT Helpdesk Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
+              👤 {adminEmail}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors cursor-pointer"
+            >
+              ออกจากระบบ
+            </button>
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
           <table className="min-w-full">
