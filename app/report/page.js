@@ -97,7 +97,7 @@ export default function ReportForm() {
       // 3. บันทึก Ticket ลงฐานข้อมูล
       const { error: ticketErr } = await supabase.from('tickets').insert([{
         line_uid: lineUid,
-        description: `[${department} - ${location}] ${description}`,
+        description: description,
         image_url: imageUrl,
         status: 'Pending'
       }]);
