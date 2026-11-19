@@ -16,28 +16,38 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ถ้าล็อกอินค้างไว้อยู่แล้ว ให้เด้งไปหน้า Dashboard เลย
+  // ถ้าล็อกอินค้างไว้อยู่แล้ว ให้เด้งไปหน้า Dashboard เลย / ถ้ายังไม่ล็อกอิน ให้คืนค่าปุ่มปกติ
   useEffect(() => {
+    setLoading(false);
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace('/');
+      if (session) window.location.replace('/');
     });
-  }, [router]);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      setErrorMsg('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+      if (error) {
+        setErrorMsg('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+        setLoading(false);
+        return;
+      }
+
       setLoading(false);
-      return;
+      window.location.replace('/');
+    } catch (err) {
+      setErrorMsg('เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
+      setLoading(false);
     }
+  
 
     router.replace('/');
   };

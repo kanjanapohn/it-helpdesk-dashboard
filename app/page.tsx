@@ -109,7 +109,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.replace('/login');
+    window.location.replace('/login');
   };
 
   const updateStatus = async (ticket: Ticket, newStatus: string, closeAfter: boolean = true) => {
