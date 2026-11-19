@@ -103,6 +103,21 @@ export default function ReportForm() {
       }]);
       if (ticketErr) throw ticketErr;
 
+      // 4. ส่งแจ้งเตือนเข้ากลุ่ม LINE ทีม IT
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'New',
+          name,
+          department,
+          location,
+          phone,
+          description,
+          hasImage: Boolean(imageUrl),
+        }),
+      });
+
       alert('✅ ส่งเรื่องแจ้งปัญหาเรียบร้อยแล้วครับ!');
       liff.closeWindow(); // ปิดหน้าต่างฟอร์มกลับเข้าแชท LINE อัตโนมัติ
     } catch (err) {
